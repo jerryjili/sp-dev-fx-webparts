@@ -36,56 +36,72 @@ export class SPService {
             // .replace(/&.+;/gi, "") replaces in the headingValue any &****; tags like &nbsp;
             let headingValue = HTMLString.substring(HTMLString.search(/<h[1-4]>/g) + 4, HTMLString.search(/<\/h[1-4]>/g))
               .replace(/<.+?>/gi, "")
-              .replace(/\&.+\;/gi, "");
+              .replace(/\&.+?\;/gi, "");
+            console.log(headingValue);
             
             headingOrder = parseInt(HTMLString.charAt(HTMLString.search(/<h[1-4]>/g) + 2));
-
-            /* Check if same anchorUrl already exists */
-            let urlExists = true;
             // .replace(/'|?|\|/| |&/g, "-") replaces any blanks and special characters (list is for sure not complete) with "-"
             // .replace(/--+/g, "-") replaces any additional - with only one -; e.g. --- get replaced with -, -- get replaced with - etc.
-            let anchorUrl = `#${headingValue
-              .replace(/\'|\?|\\|\/| |\&/g, "-")
-              .replace(/--+/g, "-")}`.toLowerCase();
-            let urlSuffix = 1;
-            while (urlExists === true) {
-              urlExists = (allUrls.indexOf(anchorUrl) === -1) ? false : true;
-              if (urlExists) {
-                anchorUrl = anchorUrl + `-${urlSuffix}`;
-                urlSuffix++;
-              }
+            let safeHeadingValue = headingValue
+                .replace(/\'|\?|\\|\/| |\:|\&|\;|\~|\`|\@|\#|\%|\^|\=|\[|\]|\{|\}|\||\<|\>|\"/g, "-")
+                .replace(/--+/g, "-");
+              
+            // In some cases the first or last character will become "-", which will lead to a wrong anchor link in SharePoint.
+            // Thus the trailing and ending "-" should be removed as well.
+            if (safeHeadingValue != "" && safeHeadingValue[0] == '-') {
+              safeHeadingValue = safeHeadingValue.substring(1);
             }
-            allUrls.push(anchorUrl);
 
-            /* Add links to Nav element */
-            if (anchorLinks.length === 0) {
-              anchorLinks.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
-            } else {
-              if (headingOrder <= prevHeadingOrder) {
-                /* Adding or Promoting links */
-                if (headingOrder === 2) {
-                  anchorLinks.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
-                  headingIndex++;
-                  subHeadingIndex = -1;
+            if (safeHeadingValue != "" && safeHeadingValue[safeHeadingValue.length-1] == '-') {
+              safeHeadingValue = safeHeadingValue.substring(0, safeHeadingValue.length-1);
+            }
+
+            if (safeHeadingValue != "") {
+              /* Check if same anchorUrl already exists */
+              let urlExists = true;              
+              let anchorUrl = `#${safeHeadingValue}`.toLowerCase();
+              let urlSuffix = 1;
+              let updatedAnchorUrl = anchorUrl;
+              while (urlExists === true) {
+                urlExists = (allUrls.indexOf(updatedAnchorUrl) === -1) ? false : true;
+                if (urlExists) {
+                  updatedAnchorUrl = anchorUrl + `-${urlSuffix}`;
+                  urlSuffix++;
+                }
+              }
+              anchorUrl = updatedAnchorUrl;
+              allUrls.push(anchorUrl);
+
+              /* Add links to Nav element */
+              if (anchorLinks.length === 0) {
+                anchorLinks.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
+              } else {
+                if (headingOrder <= prevHeadingOrder) {
+                  /* Adding or Promoting links */
+                  if (headingOrder === 2) {
+                    anchorLinks.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
+                    headingIndex++;
+                    subHeadingIndex = -1;
+                  } else {
+                    if (headingOrder === 4) {
+                      anchorLinks[headingIndex].links[subHeadingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
+                    } else if (headingOrder === 3) {
+                      anchorLinks[headingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
+                      subHeadingIndex++;
+                    }
+                  }
                 } else {
-                  if (headingOrder === 4) {
-                    anchorLinks[headingIndex].links[subHeadingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
-                  } else if (headingOrder === 3) {
+                  /* Making sub links */
+                  if (headingOrder === 3) {
                     anchorLinks[headingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
                     subHeadingIndex++;
+                  } else {
+                    anchorLinks[headingIndex].links[subHeadingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
                   }
                 }
-              } else {
-                /* Making sub links */
-                if (headingOrder === 3) {
-                  anchorLinks[headingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
-                  subHeadingIndex++;
-                } else {
-                  anchorLinks[headingIndex].links[subHeadingIndex].links.push({ name: headingValue, key: anchorUrl, url: anchorUrl, links: [], isExpanded: true });
-                }
               }
+              prevHeadingOrder = headingOrder;
             }
-            prevHeadingOrder = headingOrder;
 
             /* Replace the added header links from the string so they don't get processed again */
             HTMLString = HTMLString.replace(`<h${headingOrder}>`, '');
